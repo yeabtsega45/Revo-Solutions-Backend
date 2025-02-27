@@ -2,8 +2,8 @@ const express = require("express");
 const dotenv = require("dotenv").config();
 const cors = require("cors");
 const db = require("./config/db");
-// const authController = require("./controllers/authController");
 const workController = require("./controllers/workController");
+const userController = require("./controllers/userController");
 
 const app = express();
 app.use(express.json());
@@ -17,8 +17,8 @@ app.use(
 );
 app.use("/images", express.static("public/images"));
 
-// app.use("/auth", authController);
 app.use("/work", workController);
+app.use("/user", userController);
 
 app.listen(process.env.PORT || 5000, () =>
   console.log("server has been started successfully!")

@@ -18,7 +18,7 @@ const upload = multer({
 });
 
 // Get all works
-workController.get("/getall", async (req, res) => {
+workController.get("/get/all", async (req, res) => {
   try {
     // Fetch all works
     const [works] = await db.promise().query("SELECT * FROM works");
