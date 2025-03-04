@@ -1,7 +1,6 @@
 const workController = require("express").Router();
 const multer = require("multer");
 const db = require("../config/db");
-const verifyToken = require("../middlewares/verifyToken");
 const path = require("path");
 const fs = require("fs");
 
@@ -166,7 +165,7 @@ workController.post(
 );
 
 // Update a work
-workController.put("/edit/:id", verifyToken, async (req, res) => {
+workController.put("/edit/:id", async (req, res) => {
   const { id } = req.params;
   const {
     image,

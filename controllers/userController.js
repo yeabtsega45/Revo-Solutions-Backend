@@ -2,6 +2,7 @@ const userController = require("express").Router();
 const db = require("../config/db");
 const jwt = require("jsonwebtoken");
 const bcrypt = require("bcrypt");
+const verifyToken = require("../middlewares/verifyToken");
 
 // Login user
 userController.post("/login", async (req, res) => {
@@ -38,6 +39,11 @@ userController.post("/login", async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
+});
+
+//protected route
+userController.get("/admin", verifyToken, (req, res) => {
+  return res.json({ Status: "Success" });
 });
 
 module.exports = userController;
