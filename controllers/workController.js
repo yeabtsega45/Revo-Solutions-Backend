@@ -257,6 +257,10 @@ workController.put(
       ? categories
       : [categories];
 
+    // Get existing image filenames from request
+    const existingSmallImages = req.body.existingSmallImages || [];
+    const existingLargeImages = req.body.existingLargeImages || [];
+
     // Fetch existing images
     db.query(
       "SELECT image, introImage FROM works WHERE id = ?",
@@ -296,41 +300,29 @@ workController.put(
               }
             );
 
-            // Update large images
+            // Handle large images
             if (req.files.largeImages) {
-              db.query(
-                "DELETE FROM large_images WHERE work_id = ?",
-                [workId],
-                (err) => {
-                  if (err) return res.status(500).json({ error: err.message });
-                  req.files.largeImages.forEach((img) => {
-                    db.query(
-                      "INSERT INTO large_images (work_id, src) VALUES (?, ?)",
-                      [workId, img.filename]
-                    );
-                  });
-                }
-              );
+              // Insert new large images while keeping existing ones
+              req.files.largeImages.forEach((img) => {
+                db.query(
+                  "INSERT INTO large_images (work_id, src) VALUES (?, ?)",
+                  [workId, img.filename]
+                );
+              });
             }
 
-            // Update small images
+            // Handle small images
             if (req.files.smallImages) {
-              db.query(
-                "DELETE FROM small_images WHERE work_id = ?",
-                [workId],
-                (err) => {
-                  if (err) return res.status(500).json({ error: err.message });
-                  req.files.smallImages.forEach((img) => {
-                    db.query(
-                      "INSERT INTO small_images (work_id, src) VALUES (?, ?)",
-                      [workId, img.filename]
-                    );
-                  });
-                }
-              );
+              // Insert new small images while keeping existing ones
+              req.files.smallImages.forEach((img) => {
+                db.query(
+                  "INSERT INTO small_images (work_id, src) VALUES (?, ?)",
+                  [workId, img.filename]
+                );
+              });
             }
 
-            // Delete replaced images from filesystem
+            // Delete replaced main images from filesystem
             [work.image, work.introImage].forEach((img) => {
               if (img && img !== newImage && img !== newIntroImage) {
                 const imagePath = path.join(__dirname, "../public/images", img);
