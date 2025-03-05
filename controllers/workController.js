@@ -21,8 +21,10 @@ const upload = multer({
 // Get all works
 workController.get("/get/all", async (req, res) => {
   try {
-    // Fetch all works
-    const [works] = await db.promise().query("SELECT * FROM works");
+    // Fetch all works ordered by the `order` column
+    const [works] = await db
+      .promise()
+      .query("SELECT * FROM works ORDER BY `order` ASC");
 
     // Fetch categories, large images, and small images for each work
     const worksWithDetails = await Promise.all(
@@ -406,6 +408,34 @@ workController.delete("/delete/:id", (req, res) => {
       });
     });
   });
+});
+
+// update work order
+workController.put("/reorder", async (req, res) => {
+  const reorderedWorks = req.body;
+
+  try {
+    // Start a transaction
+    await db.beginTransaction();
+
+    // Update each work's order in the database
+    for (const work of reorderedWorks) {
+      db.query("UPDATE works SET `order` = ? WHERE id = ?", [
+        work.order,
+        work.id,
+      ]);
+    }
+
+    // Commit the transaction
+    await db.commit();
+
+    res.json({ message: "Works reordered successfully!" });
+  } catch (error) {
+    // Rollback in case of error
+    await db.rollback();
+    console.error("Error updating order:", error);
+    res.status(500).json({ error: "Failed to update order" });
+  }
 });
 
 module.exports = workController;
