@@ -414,25 +414,25 @@ workController.delete("/delete/:id", (req, res) => {
 workController.put("/reorder", async (req, res) => {
   const reorderedWorks = req.body;
 
+  const connection = await db.promise().getConnection(); // ✅ Use promise-based connection
+
   try {
-    // Start a transaction
-    await db.beginTransaction();
+    await connection.beginTransaction();
 
     // Update each work's order in the database
     for (const work of reorderedWorks) {
-      db.query("UPDATE works SET `order` = ? WHERE id = ?", [
+      await connection.query("UPDATE works SET `order` = ? WHERE id = ?", [
         work.order,
         work.id,
       ]);
     }
 
-    // Commit the transaction
-    await db.commit();
-
+    await connection.commit();
+    connection.release();
     res.json({ message: "Works reordered successfully!" });
   } catch (error) {
-    // Rollback in case of error
-    await db.rollback();
+    await connection.rollback();
+    connection.release();
     console.error("Error updating order:", error);
     res.status(500).json({ error: "Failed to update order" });
   }
