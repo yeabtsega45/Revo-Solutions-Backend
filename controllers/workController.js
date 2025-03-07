@@ -72,18 +72,25 @@ workController.get("/get/:id", async (req, res) => {
       return res.status(404).json({ error: "Work not found" });
     }
 
-    // Fetch categories, large images, and small images
+    // Fetch categories
     const [categories] = await db
       .promise()
       .query("SELECT category_name FROM categories WHERE work_id = ?", [id]);
 
+    // Fetch large and small images by order
     const [largeImages] = await db
       .promise()
-      .query("SELECT src FROM large_images WHERE work_id = ?", [id]);
+      .query(
+        "SELECT src FROM large_images WHERE work_id = ? ORDER BY `order` ASC",
+        [id]
+      );
 
     const [smallImages] = await db
       .promise()
-      .query("SELECT src FROM small_images WHERE work_id = ?", [id]);
+      .query(
+        "SELECT src FROM small_images WHERE work_id = ? ORDER BY `order` ASC",
+        [id]
+      );
 
     const workData = {
       ...work[0],
@@ -167,81 +174,6 @@ workController.post(
 );
 
 // Update a work
-workController.put("/edit/:id", async (req, res) => {
-  const { id } = req.params;
-  const {
-    image,
-    client,
-    tags,
-    description,
-    introImage,
-    categories,
-    largeImages,
-    smallImages,
-  } = req.body;
-
-  try {
-    // Check if the work exists
-    const [work] = await db
-      .promise()
-      .query("SELECT * FROM works WHERE id = ?", [id]);
-
-    if (work.length === 0) {
-      return res.status(404).json({ error: "Work not found" });
-    }
-
-    // Update work details
-    await db
-      .promise()
-      .query(
-        "UPDATE works SET image = ?, client = ?, tags = ?, description = ?, introImage = ? WHERE id = ?",
-        [image, client, tags, description, introImage, id]
-      );
-
-    // Update categories
-    await db.promise().query("DELETE FROM categories WHERE work_id = ?", [id]);
-    if (categories && categories.length > 0) {
-      const categoryValues = categories.map((category) => [id, category]);
-      await db
-        .promise()
-        .query("INSERT INTO categories (work_id, category_name) VALUES ?", [
-          categoryValues,
-        ]);
-    }
-
-    // Update large images
-    await db
-      .promise()
-      .query("DELETE FROM large_images WHERE work_id = ?", [id]);
-    if (largeImages && largeImages.length > 0) {
-      const largeImageValues = largeImages.map((img) => [id, img.src]);
-      await db
-        .promise()
-        .query("INSERT INTO large_images (work_id, src) VALUES ?", [
-          largeImageValues,
-        ]);
-    }
-
-    // Update small images
-    await db
-      .promise()
-      .query("DELETE FROM small_images WHERE work_id = ?", [id]);
-    if (smallImages && smallImages.length > 0) {
-      const smallImageValues = smallImages.map((img) => [id, img.src]);
-      await db
-        .promise()
-        .query("INSERT INTO small_images (work_id, src) VALUES ?", [
-          smallImageValues,
-        ]);
-    }
-
-    res.json({ message: "Work updated successfully!" });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// Update a work
 workController.put(
   "/update/:id",
   upload.fields([
@@ -258,9 +190,24 @@ workController.put(
       ? categories
       : [categories];
 
-    // Get existing image filenames from request
+    // Get existing image filenames and their orders
     const existingSmallImages = req.body.existingSmallImages || [];
+    const existingSmallImagesOrder = req.body.existingSmallImagesOrder || [];
     const existingLargeImages = req.body.existingLargeImages || [];
+    const existingLargeImagesOrder = req.body.existingLargeImagesOrder || [];
+
+    // Get new image orders
+    const smallImagesOrder = req.body.smallImagesOrder || [];
+    const largeImagesOrder = req.body.largeImagesOrder || [];
+
+    // Get images to delete
+    // Ensure deleted images are always arrays
+    const smallImagesToDelete = Array.isArray(req.body.smallImagesToDelete)
+      ? req.body.smallImagesToDelete
+      : [req.body.smallImagesToDelete].filter(Boolean);
+    const largeImagesToDelete = Array.isArray(req.body.largeImagesToDelete)
+      ? req.body.largeImagesToDelete
+      : [req.body.largeImagesToDelete].filter(Boolean);
 
     // Fetch existing images
     db.query(
@@ -301,24 +248,38 @@ workController.put(
               }
             );
 
-            // Handle large images
+            // Update existing large images order
+            existingLargeImages.forEach((filename, index) => {
+              db.query(
+                "UPDATE large_images SET `order` = ? WHERE work_id = ? AND src = ?",
+                [existingLargeImagesOrder[index], workId, filename]
+              );
+            });
+
+            // Insert new large images with order
             if (req.files.largeImages) {
-              // Insert new large images while keeping existing ones
-              req.files.largeImages.forEach((img) => {
+              req.files.largeImages.forEach((img, index) => {
                 db.query(
-                  "INSERT INTO large_images (work_id, src) VALUES (?, ?)",
-                  [workId, img.filename]
+                  "INSERT INTO large_images (work_id, src, `order`) VALUES (?, ?, ?)",
+                  [workId, img.filename, largeImagesOrder[index]]
                 );
               });
             }
 
-            // Handle small images
+            // Update existing small images order
+            existingSmallImages.forEach((filename, index) => {
+              db.query(
+                "UPDATE small_images SET `order` = ? WHERE work_id = ? AND src = ?",
+                [existingSmallImagesOrder[index], workId, filename]
+              );
+            });
+
+            // Insert new small images with order
             if (req.files.smallImages) {
-              // Insert new small images while keeping existing ones
-              req.files.smallImages.forEach((img) => {
+              req.files.smallImages.forEach((img, index) => {
                 db.query(
-                  "INSERT INTO small_images (work_id, src) VALUES (?, ?)",
-                  [workId, img.filename]
+                  "INSERT INTO small_images (work_id, src, `order`) VALUES (?, ?, ?)",
+                  [workId, img.filename, smallImagesOrder[index]]
                 );
               });
             }
@@ -333,6 +294,39 @@ workController.put(
                 });
               }
             });
+
+            // Delete images marked for deletion
+            // Delete small images
+            if (smallImagesToDelete.length > 0) {
+              db.query(
+                "DELETE FROM small_images WHERE work_id = ? AND src IN (?)",
+                [workId, smallImagesToDelete]
+              );
+
+              smallImagesToDelete.forEach((img) => {
+                const imagePath = path.join(__dirname, "../public/images", img);
+                fs.unlink(imagePath, (err) => {
+                  if (err && err.code !== "ENOENT")
+                    console.error("Error deleting image:", err);
+                });
+              });
+            }
+
+            // Delete large images
+            if (largeImagesToDelete.length > 0) {
+              db.query(
+                "DELETE FROM large_images WHERE work_id = ? AND src IN (?)",
+                [workId, largeImagesToDelete]
+              );
+
+              largeImagesToDelete.forEach((img) => {
+                const imagePath = path.join(__dirname, "../public/images", img);
+                fs.unlink(imagePath, (err) => {
+                  if (err && err.code !== "ENOENT")
+                    console.error("Error deleting image:", err);
+                });
+              });
+            }
 
             res.json({ message: "Work updated successfully" });
           }
